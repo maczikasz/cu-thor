@@ -3,8 +3,7 @@ service ExecutorService{
   rpc StopExecution (ExecutionIdRequest) returns (StopCommandReply) {}
   rpc ListExecutions (EmptyRequest) returns (ExecutionListReply) {}
   rpc GetExecution (ExecutionIdRequest) returns (ExecutionInfoReply) {}
-  rpc GetOutStream(ExecutionIdRequest) returns (stream OutEntry) {}
-  rpc GetOut(ExecutionIdRequest) returns (OutEntriesReply) {}
+  rpc GetOutStream(ExecutionIdRequest) returns (stream OutChunk) {}
 }
 
 message ExecuteRequest {
@@ -54,8 +53,8 @@ message StopCommandReply {
   required int32 exitCode = 3;
 }
 
-message OutEntry {
-  required string line = 1;
+message OutChunk {
+  required bytes bytes = 1;
 }
 
 message OutEntriesReply {

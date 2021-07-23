@@ -17,25 +17,23 @@ The library API should provide the following methods to the clients:
 The GRPC API defines the following methods:
 
 * ExecuteCommand: Starts a command with limited resources in its own namespace with the supplied arguments
-* StopExecution : Stop a certain execution 
+* StopExecution : Stop a certain execution, issues a SIGTERM than after a configured amount of seconds issues a SIGKILL
 * ListExecutions: List all the executions the connected client has rights to
 * GetExecution: Gets metadata about a certain execution defined by an execution ID
-* GetOutStream: Get a stream of lines of standard output (stdout & stderr) of a certain execution
-* GetOut: Get all lines of standard output (stdout & stderr) that has been written so far by the process
+* GetOutStream: Get a stream of standard output (stdout & stderr) of a certain execution
 
-To read about the exact details of the API you can look at [the proto file](api.proto)
+To read about the exact details of the API you can look at [the proto file](api.proto). The server will return UUIDs as ExecutionId that will be then used to later identify a certain execution. The reason for not using PID as an ExecutionId is because PIDs could be reused which could lead to unexpected behaviour from the application
 
 ### Streaming data
 
-In order to be able to stream and also send the full output of the processes we need to store the output of this in memory for simplicty, in order to be able to keep memory from being overloaded a simple recylcing of these processes will be implemented. See [Tradeoffs](#tradeoffs) section for information about why this solution should not be used in production  
+In order to be able to stream and also send the full output of the processes we need to store the output of this in memory for simplicty. See [Tradeoffs](#tradeoffs) section for information about why this solution should not be used in production  
 
 ## Security
 
 ### Cipher suite
 
-In order to be secure the app will use the TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 cypher suite.
-
-It suits our needs to be a strong cypher suite by using AES, SHA-2 and ephemeral Diffie-Hellman key exchange, even though the ephemeral key exchange thakes more compute power, with the amount of the frequency of the connections (processes are started, then waited on, and output read) the added security is worth it
+In order to have the latest and strongest transport encryption TLS 1.3 should be utilized. The cipher suite TLS_AES_128_GCM_SHA256 is the mandatory cipher suite for TLS 1.3, and it provides sufficiently strong encryption there for it will be used by the server
+The decision to ultimately use TLS 1.3 is due to the fact that the client and the server controlled by the same entity, therefore it's easy to enforce the usage of the latest version
 
 ### Authentication
 
@@ -53,7 +51,7 @@ The root CA will use a private key that's 4096 bits and the client and server ce
 
 To keep things simple, the following statement should hold for every process started on the server:
 
-`Only clients authenticated with the client certs hacing the same CN can get any information about a certain process`
+`Only clients authenticated with the client certs having the same CN can get any information about, or interact with a certain process`
 
 ## Process execution
 
@@ -77,9 +75,36 @@ The client CLI will have a two top level commands:
 
 The `start` command will send a command to be started to the server, along with the arguments passed to it
 
+```
+Usage: args start [--command COMMAND] [ARGS [ARGS ...]]
+
+Positional arguments:
+  ARGS                   these arguments will be supplied to the executed command
+
+Options:
+  --command COMMAND      the command to be executed on the server
+
+```
+
+The example of `cu-thor start --command head /dev/random` will result in executing the command `head` with the argument `/dev/random`
+Similarly the command `cu-thor start --command head -- -n10 /dev/random` will execute the command `head` with the arguments `-n10` and `/dev/random`
+
 The `execution` will have a `list` subcommand that will return the current executions that this client has rights to interact with
 
-The `execution` subcommand will also provide all functions to manipulate an existing execution on the server like, `status`, `stop`, `output`, to use these subcommands a `--id` parameter must be supplied with the id of the execution 
+The `execution` subcommand will also provide all functions to manipulate an existing execution on the server like, `status`, `stop`, `output`, to use these subcommands a `--id` parameter must be supplied with the id of the execution
+
+```
+Usage: args execution <command> [<args>]
+  --help, -h             display this help and exit
+
+Commands:
+  list                   shows information about the currently available executions
+  stop                   stops an execution
+  status                 returns the information about a certain execution
+  output                 streams the output of a certain execution
+```
+
+
 
 # Tradeoffs
 
@@ -87,7 +112,7 @@ The `execution` subcommand will also provide all functions to manipulate an exis
 
 The in memory log storage has two serious drawbacks. 
 * A single offending process can fill the memory of the server with output
-* The executions metadata needs to be kept in memory after the execution have finished
+* The executions metadata needs to be kept in memory after the execution have finished, a recycling of the executions should be implemented
 
 One mitigation step would be to store the output of the single processes in a predefined directory. This would allow the server to rely on this directory to return the output. The downside of this is that the app needs to implement a `tail -f` type function to stream the data the client
 
