@@ -57,7 +57,7 @@ To keep things simple, the following statement should hold for every process sta
 
 ### Resource control
 
-To control resource allocation linux control groups (chroups) can be utilized
+To control resource allocation linux control groups (cgroups) can be utilized
 
 For the required CPU, Memory, and DiskIO limits a new cgroup could be created per process using the cpu, memory and blkio controllers
 
