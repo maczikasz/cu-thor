@@ -1,28 +1,30 @@
+syntax="proto3";
+
+import 'google/protobuf/empty.proto';
+
 service ExecutorService{
   rpc ExecuteCommand (ExecuteRequest) returns (ExecuteReply) {}
   rpc StopExecution (ExecutionIdRequest) returns (StopCommandReply) {}
-  rpc ListExecutions (EmptyRequest) returns (ExecutionListReply) {}
+  rpc ListAllExecutions (google.protobuf.Empty) returns (ExecutionListReply) {}
   rpc GetExecution (ExecutionIdRequest) returns (ExecutionInfoReply) {}
   rpc GetOutStream(ExecutionIdRequest) returns (stream OutChunk) {}
 }
 
 message ExecuteRequest {
-  required string command = 1;
+  string command = 1;
   repeated string args = 2;
 }
 
 message ExecutionIdRequest {
-  required ExecutionId executionId = 1;
+  ExecutionId executionId = 1;
 }
 
-message EmptyRequest {}
-
 message ExecutionId {
-  required string value = 1;
+  string value = 1;
 }
 
 message ExecuteReply {
-  required ExecutionId executionId = 1;
+  ExecutionId executionId = 1;
 }
 
 message ExecutionListReply {
@@ -30,7 +32,7 @@ message ExecutionListReply {
 }
 
 message ExecutionInfoReply {
-  required ExecutionId executionId = 1;
+  ExecutionId executionId = 1;
   enum ExecutionStatus {
     UNKNOWN = 0;
     FINISHED = 1;
@@ -38,25 +40,21 @@ message ExecutionInfoReply {
     ABORTED = 3;
     NOT_STARTED = 4;
   }
-  required ExecutionStatus status = 2;
+  ExecutionStatus status = 2;
   optional int32 exitCode = 3;
 }
 
 message StopCommandReply {
-  required ExecutionId executionId = 1;
+  ExecutionId executionId = 1;
   enum StopStatus {
     UNKNOWN = 0;
     STOPPED = 1;
     KILLED = 2;
   }
-  required StopStatus status = 2;
-  required int32 exitCode = 3;
+  StopStatus status = 2;
+  int32 exitCode = 3;
 }
 
 message OutChunk {
-  required bytes bytes = 1;
-}
-
-message OutEntriesReply {
-  repeated string lines = 1;
+  bytes bytes = 1;
 }

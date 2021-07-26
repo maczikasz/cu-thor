@@ -18,7 +18,7 @@ The GRPC API defines the following methods:
 
 * ExecuteCommand: Starts a command with limited resources in its own namespace with the supplied arguments
 * StopExecution : Stop a certain execution, issues a SIGTERM than after a configured amount of seconds issues a SIGKILL
-* ListExecutions: List all the executions the connected client has rights to
+* ListAllExecutions: List all the executions the connected client has rights to
 * GetExecution: Gets metadata about a certain execution defined by an execution ID
 * GetOutStream: Get a stream of standard output (stdout & stderr) of a certain execution
 
@@ -57,26 +57,48 @@ To keep things simple, the following statement should hold for every process sta
 
 ### Resource control
 
-To control resource allocation linux control groups (cgroups) can be utilized
+To control resource allocation linux control groups (cgroups v2) can be utilized
 
-For the required CPU, Memory, and DiskIO limits a new cgroup could be created per process using the cpu, memory and blkio controllers
+The following cgroups v2 controller parameters will be used to provide resource limitation:
+
+* CPU: `cpu.max` to limit the available cput percentage
+* Memory: `memory.max` and `memory.high` to set a hard and a soft limit for memory usage
+* IO: `io.max` with the `rbps` and `wbps` parameters will be used to enforce Write and Read limit on all block devices 
+
+The job executor library will create a separate cgroup for each process, this way it can limit the cpu percentage per process
+The app will start the processes first then add their PIDs to the `cgroup.procs` file in the associated cgroup
+See [Tradeoffs](#tradeoffs) section for information about how this could be improved
 
 ### Isolation
 
 To implement isolation of namespaces for PID, Mount and Networks unix namespaces will be used
 
-In order to be able to set up proper isolation there is need to run some initialization process before the app executes in the new namespace.
+The app will implement a simple isolation for the child processes where it will just supply the required CloneFlags to setup a new PID, Mount and Network namepsace. 
+
+See [Tradeoffs](#tradeoffs) section for information about how this should be improved
 
 ## Client
 
-The client CLI will have a two top level commands:
+The client CLI will have a top level command for each feature it supports:
 
-`start` and `execution`
+```
+Usage: cu-thor <command> [<args>]
+
+Options:
+  --help, -h             display this help and exit
+
+Commands:
+  start                  starts the remote execution of a command on the server
+  list                   shows information about the currently available executions
+  stop                   stops an execution
+  status                 returns the information about a certain execution
+  output                 streams the output of a certain execution
+```
 
 The `start` command will send a command to be started to the server, along with the arguments passed to it
 
 ```
-Usage: args start [--command COMMAND] [ARGS [ARGS ...]]
+Usage: cu-thor start [--command COMMAND] [ARGS [ARGS ...]]
 
 Positional arguments:
   ARGS                   these arguments will be supplied to the executed command
@@ -89,22 +111,11 @@ Options:
 The example of `cu-thor start --command head /dev/random` will result in executing the command `head` with the argument `/dev/random`
 Similarly the command `cu-thor start --command head -- -n10 /dev/random` will execute the command `head` with the arguments `-n10` and `/dev/random`
 
-The `execution` will have a `list` subcommand that will return the current executions that this client has rights to interact with
+The `list` subcommand will return the current executions that this client has rights to interact with
 
-The `execution` subcommand will also provide all functions to manipulate an existing execution on the server like, `status`, `stop`, `output`, to use these subcommands a `--id` parameter must be supplied with the id of the execution
+The `status`, `stop`, `output`, subcommands all require the `--id` parameter must be supplied with the id of the execution
 
-```
-Usage: args execution <command> [<args>]
-  --help, -h             display this help and exit
-
-Commands:
-  list                   shows information about the currently available executions
-  stop                   stops an execution
-  status                 returns the information about a certain execution
-  output                 streams the output of a certain execution
-```
-
-
+The client credentials for simplicty's sake will be read from `~/.cu-thor/creds/` but could be overwritten by the `CUTHOR_CLIENT_CRED_LOCATION` environment variable 
 
 # Tradeoffs
 
@@ -123,3 +134,15 @@ The current cert generation with the script is not a good way to easily provisio
 ## Persistent storage
 
 Execution metadata and output live only as far as the server keeps it in memory. After a server crash/restart all previous executions are lost. This could be acceptable, but most likely some form of persistent storage should be introduced
+
+## Resource limits
+
+The app will start the process and then add its PID to the appropriate file in the corresponding cgroup. This is a working solution, but it would be nicer to start an auxiliary app that will add itself the correct cgroup then start up the passed process as its child automatically in the cgroup. There is such a command in the `libcgroup-tools` package called `cgexec`
+
+Since the app limits each process to a certain % of CPU time we can over allocate the available CPU time the server should either limit the number of allowed parallel processes, or should encapsulate the cgroups in an outer cgroup that for safety reasons sets a limit on the cumulative resource usage of the all the started processes
+
+## Isolation
+
+The app will start the underlying processes in their own linux namespaces by passing the appropriate clone flags to the command executor. This will however not provide full isolation. In order to create a fully isolated environment the following steps should be taken:
+* Setup an own `/proc` directory to limit the visiblity of the host processes and the host mounts
+* Setup a veth network interface to be able to communicate with the outside world using the hosts network interfaces
