@@ -1,0 +1,60 @@
+syntax="proto3";
+
+import 'google/protobuf/empty.proto';
+
+service ExecutorService{
+  rpc ExecuteCommand (ExecuteRequest) returns (ExecuteReply) {}
+  rpc StopExecution (ExecutionIdRequest) returns (StopCommandReply) {}
+  rpc ListAllExecutions (google.protobuf.Empty) returns (ExecutionListReply) {}
+  rpc GetExecution (ExecutionIdRequest) returns (ExecutionInfoReply) {}
+  rpc GetOutStream(ExecutionIdRequest) returns (stream OutChunk) {}
+}
+
+message ExecuteRequest {
+  string command = 1;
+  repeated string args = 2;
+}
+
+message ExecutionIdRequest {
+  ExecutionId executionId = 1;
+}
+
+message ExecutionId {
+  string value = 1;
+}
+
+message ExecuteReply {
+  ExecutionId executionId = 1;
+}
+
+message ExecutionListReply {
+  repeated ExecutionInfoReply executions = 1;
+}
+
+message ExecutionInfoReply {
+  ExecutionId executionId = 1;
+  enum ExecutionStatus {
+    UNKNOWN = 0;
+    FINISHED = 1;
+    RUNNING = 2;
+    ABORTED = 3;
+    NOT_STARTED = 4;
+  }
+  ExecutionStatus status = 2;
+  optional int32 exitCode = 3;
+}
+
+message StopCommandReply {
+  ExecutionId executionId = 1;
+  enum StopStatus {
+    UNKNOWN = 0;
+    STOPPED = 1;
+    KILLED = 2;
+  }
+  StopStatus status = 2;
+  int32 exitCode = 3;
+}
+
+message OutChunk {
+  bytes bytes = 1;
+}
